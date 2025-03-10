@@ -1,4 +1,6 @@
 import Konva from 'konva';
+import { handleImageUpload } from './imageUpload';
+import { Project, Slab, TargetArea } from './types';
 
 document.addEventListener('DOMContentLoaded', () => {
     const width = window.innerWidth;
@@ -16,51 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadInput = document.getElementById('imageUpload') as HTMLInputElement;
     const dimensionInput = document.getElementById('dimensions') as HTMLInputElement;
 
-    uploadInput.addEventListener('change', handleImageUpload);
+    uploadInput.addEventListener('change', (event) => handleImageUpload(event, stage, layer, saveSlab));
     dimensionInput.addEventListener('input', simulateCuts);
-
-    function handleImageUpload(event: Event) {
-        const file = (event.target as HTMLInputElement).files![0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const imageObj = new Image();
-                imageObj.src = e.target!.result as string;
-                imageObj.onload = () => {
-                    const konvaImage = new Konva.Image({
-                        image: imageObj,
-                        x: stage.width() / 2 - imageObj.width / 2,
-                        y: stage.height() / 2 - imageObj.height / 2,
-                        draggable: true,
-                    });
-
-                    layer.add(konvaImage);
-                    layer.draw();
-
-                    konvaImage.on('wheel', (e: Konva.KonvaEventObject<WheelEvent>) => {
-                        e.evt.preventDefault();
-                        const oldScale = konvaImage.scaleX();
-                        const pointer = stage.getPointerPosition();
-                        const mousePointTo = {
-                            x: (pointer!.x - konvaImage.x()) / oldScale,
-                            y: (pointer!.y - konvaImage.y()) / oldScale,
-                        };
-
-                        const newScale = e.evt.deltaY > 0 ? oldScale * 1.1 : oldScale / 1.1;
-                        konvaImage.scale({ x: newScale, y: newScale });
-
-                        const newPos = {
-                            x: pointer!.x - mousePointTo.x * newScale,
-                            y: pointer!.y - mousePointTo.y * newScale,
-                        };
-                        konvaImage.position(newPos);
-                        layer.batchDraw();
-                    });
-                };
-            };
-            reader.readAsDataURL(file);
-        }
-    }
 
     function simulateCuts() {
         const dimensions = dimensionInput.value.split('x').map(Number);
@@ -76,6 +35,32 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             layer.add(rect);
             layer.draw();
+        }
+    }
+
+    function saveSlab(slab: Slab) {
+        const project = loadProject();
+        project.slabs.push(slab);
+        localStorage.setItem('currentProject', JSON.stringify(project));
+    }
+
+    function loadProject(): Project {
+        const projectData = localStorage.getItem('currentProject');
+        if (projectData) {
+            return JSON.parse(projectData) as Project;
+        } else {
+            const newProject: Project = {
+                name: 'My Project',
+                slabs: [],
+                targetArea: {
+                    type: 'rectangle',
+                    width: 800,
+                    height: 600,
+                },
+                transformations: [],
+            };
+            localStorage.setItem('currentProject', JSON.stringify(newProject));
+            return newProject;
         }
     }
 
