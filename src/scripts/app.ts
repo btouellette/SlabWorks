@@ -1,6 +1,7 @@
 import Konva from 'konva';
 import { handleImageUpload } from './imageUpload';
 import { Project, Slab, TargetArea } from './types';
+import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
     const width = window.innerWidth;
