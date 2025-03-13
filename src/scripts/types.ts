@@ -27,10 +27,10 @@ export type RemoveTransformation = {
 export type Transformation = MoveTransformation | RotateTransformation | CutTransformation | RemoveTransformation;
 
 export type ShelvedSlab = {
-    id: string;
     dataUrl: string; // Locally encoded base64 image
     width: number;
     height: number;
+    name?: string;
 }
 
 
@@ -63,4 +63,8 @@ export type Project = {
 // Represents a list of projects, this is what is serialized to localStorage
 export type ProjectList = {
     projects: Project[];
+}
+
+export type Shelf = {
+    slabs: ShelvedSlab[];
 }

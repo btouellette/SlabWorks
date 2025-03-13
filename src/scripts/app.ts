@@ -1,77 +1,54 @@
 import Konva from 'konva';
+import localforage from 'localforage';
 import { handleImageUpload } from './imageUpload';
-import { Project, Slab, TargetArea } from './types';
+import { Slab, ShelvedSlab } from './types';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
+    console.log('App loaded');
     const stage = new Konva.Stage({
         container: 'container',
-        width: width,
-        height: height,
     });
 
     const layer = new Konva.Layer();
     stage.add(layer);
 
     const uploadInput = document.getElementById('imageUpload') as HTMLInputElement;
-    const dimensionInput = document.getElementById('dimensions') as HTMLInputElement;
 
     uploadInput.addEventListener('change', (event) => handleImageUpload(event, stage, layer, saveSlab));
-    dimensionInput.addEventListener('input', simulateCuts);
 
-    function simulateCuts() {
-        const dimensions = dimensionInput.value.split('x').map(Number);
-        if (dimensions.length === 2) {
-            const [width, height] = dimensions;
-            const rect = new Konva.Rect({
-                x: 0,
-                y: 0,
-                width: width,
-                height: height,
-                stroke: 'red',
-                strokeWidth: 2,
-            });
-            layer.add(rect);
-            layer.draw();
-        }
+    async function saveSlab(slab: Slab) {
+        const shelf = await loadShelf();
+        shelf.slabs.push(slab);
+        await localforage.setItem('shelf', shelf);
+        displayShelf();
     }
 
-    function saveSlab(slab: Slab) {
-        const project = loadProject();
-        project.slabs.push(slab);
-        localStorage.setItem('currentProject', JSON.stringify(project));
-    }
-
-    function loadProject(): Project {
-        const projectData = localStorage.getItem('currentProject');
-        if (projectData) {
-            return JSON.parse(projectData) as Project;
+    async function loadShelf(): Promise<{ slabs: ShelvedSlab[] }> {
+        const shelf = await localforage.getItem<{ slabs: ShelvedSlab[] }>('shelf');
+        if (shelf) {
+            console.log('Shelf data loaded from IndexedDB:', shelf);
+            return shelf;
         } else {
-            const newProject: Project = {
-                name: 'My Project',
-                slabs: [],
-                targetArea: {
-                    type: 'rectangle',
-                    width: 800,
-                    height: 600,
-                },
-                transformations: [],
-            };
-            localStorage.setItem('currentProject', JSON.stringify(newProject));
-            return newProject;
+            const newShelf = { slabs: [] };
+            await localforage.setItem('shelf', newShelf);
+            return newShelf;
         }
     }
 
-    function saveUserData() {
-        const userData = {
-            image: uploadInput.value,
-            dimensions: dimensionInput.value
-        };
-        localStorage.setItem('woodSlabData', JSON.stringify(userData));
+    async function displayShelf() {
+        const shelf = await loadShelf();
+        console.log('Displaying shelf:', shelf);
+        const shelfThumbnails = document.getElementById('shelf-thumbnails')!;
+        shelfThumbnails.innerHTML = '';
+        shelf.slabs.forEach(slab => {
+            const img = document.createElement('img');
+            img.src = slab.dataUrl;
+            img.className = 'w-full h-auto';
+            shelfThumbnails.appendChild(img);
+        });
     }
 
-    window.addEventListener('beforeunload', saveUserData);
+    // Initial display of the shelf
+    displayShelf();
 });
