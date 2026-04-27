@@ -4,6 +4,7 @@ import { handleImageUpload } from './imageUpload';
 import { Slab, ShelvedSlab, TargetArea } from './types';
 import { generateId } from './utils';
 import { drawTargetArea } from './targetArea';
+import { attachRotationHandler } from './slabControls';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 draggable: true,
             });
             layer.add(konvaImage);
+            attachRotationHandler(konvaImage, layer);
             layer.draw();
             placedSlabs.set(slab.id, konvaImage);
             updateThumbnailIndicator(slab.id, true);
