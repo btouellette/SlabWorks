@@ -32,20 +32,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const heightInput = document.getElementById('target-height') as HTMLInputElement;
     const shapeSelect = document.getElementById('target-shape') as HTMLSelectElement;
 
+    function saveTargetAreaSettings() {
+        localforage.setItem('targetArea', currentTargetArea);
+    }
+
     widthInput.addEventListener('input', () => {
         currentTargetArea = { ...currentTargetArea, width: Number(widthInput.value) || 24 };
         redrawTargetArea();
+        saveTargetAreaSettings();
     });
     heightInput.addEventListener('input', () => {
         currentTargetArea = { ...currentTargetArea, height: Number(heightInput.value) || 48 };
         redrawTargetArea();
+        saveTargetAreaSettings();
     });
     shapeSelect.addEventListener('change', () => {
         currentTargetArea = { ...currentTargetArea, type: shapeSelect.value as 'rectangle' | 'ellipse' };
         redrawTargetArea();
+        saveTargetAreaSettings();
     });
 
-    redrawTargetArea();
+    localforage.getItem<TargetArea>('targetArea').then(saved => {
+        if (saved) {
+            currentTargetArea = saved;
+            widthInput.value = String(saved.width);
+            heightInput.value = String(saved.height);
+            shapeSelect.value = saved.type;
+        }
+        redrawTargetArea();
+    });
 
     const uploadInput = document.getElementById('imageUpload') as HTMLInputElement;
     uploadInput.addEventListener('change', (event) => handleImageUpload(event, saveSlab));
