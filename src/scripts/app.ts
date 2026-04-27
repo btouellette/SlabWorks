@@ -5,6 +5,7 @@ import { Slab, ShelvedSlab, TargetArea } from './types';
 import { generateId } from './utils';
 import { drawTargetArea } from './targetArea';
 import { attachRotationHandler } from './slabControls';
+import { History } from './history';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const placedSlabs = new Map<string, Konva.Image>();
     let selectedSlabId: string | null = null;
+    const history = new History();
 
     let currentTargetArea: TargetArea = { type: 'rectangle', width: 24, height: 48 };
 
@@ -109,16 +111,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 y: stage.height() / 2 - imageObj.height / 2,
                 draggable: true,
             });
+            let dragStartState = { x: 0, y: 0, rotation: 0 };
+            konvaImage.on('dragstart', () => {
+                dragStartState = { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() };
+            });
+            konvaImage.on('dragend', () => {
+                history.push({
+                    kind: 'drag',
+                    node: konvaImage,
+                    before: dragStartState,
+                    after: { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() },
+                });
+            });
             konvaImage.on('click', () => {
                 selectedSlabId = slab.id;
                 transformer.nodes([konvaImage]);
                 layer.batchDraw();
             });
             layer.add(konvaImage);
-            attachRotationHandler(konvaImage, layer);
+            attachRotationHandler(konvaImage, layer, (before, after) => {
+                history.push({ kind: 'rotate', node: konvaImage, before, after });
+            });
             layer.draw();
             placedSlabs.set(slab.id, konvaImage);
             updateThumbnailIndicator(slab.id, true);
+            history.push({ kind: 'place', slabId: slab.id, node: konvaImage, x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() });
         };
     }
 
@@ -160,12 +177,67 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (evt) => {
         if ((evt.key === 'Delete' || evt.key === 'Backspace') && selectedSlabId) {
             const node = placedSlabs.get(selectedSlabId);
-            if (node) node.destroy();
+            if (node) {
+                history.push({ kind: 'remove', slabId: selectedSlabId, node, x: node.x(), y: node.y(), rotation: node.rotation() });
+                node.remove();
+            }
             placedSlabs.delete(selectedSlabId);
             updateThumbnailIndicator(selectedSlabId, false);
             selectedSlabId = null;
             transformer.nodes([]);
             layer.batchDraw();
+        } else if (evt.ctrlKey && evt.key.toLowerCase() === 'z' && !evt.shiftKey) {
+            evt.preventDefault();
+            const entry = history.undo();
+            if (entry) {
+                if (entry.kind === 'rotate' || entry.kind === 'drag') {
+                    entry.node.x(entry.before.x);
+                    entry.node.y(entry.before.y);
+                    entry.node.rotation(entry.before.rotation);
+                } else if (entry.kind === 'place') {
+                    entry.node.remove();
+                    placedSlabs.delete(entry.slabId);
+                    updateThumbnailIndicator(entry.slabId, false);
+                    if (selectedSlabId === entry.slabId) {
+                        selectedSlabId = null;
+                        transformer.nodes([]);
+                    }
+                } else if (entry.kind === 'remove') {
+                    entry.node.x(entry.x);
+                    entry.node.y(entry.y);
+                    entry.node.rotation(entry.rotation);
+                    layer.add(entry.node);
+                    placedSlabs.set(entry.slabId, entry.node);
+                    updateThumbnailIndicator(entry.slabId, true);
+                }
+                layer.batchDraw();
+            }
+        } else if (evt.ctrlKey && (evt.key === 'y' || (evt.key.toLowerCase() === 'z' && evt.shiftKey))) {
+            evt.preventDefault();
+            const entry = history.redo();
+            if (entry) {
+                if (entry.kind === 'rotate' || entry.kind === 'drag') {
+                    entry.node.x(entry.after.x);
+                    entry.node.y(entry.after.y);
+                    entry.node.rotation(entry.after.rotation);
+                } else if (entry.kind === 'place') {
+                    entry.node.x(entry.x);
+                    entry.node.y(entry.y);
+                    entry.node.rotation(entry.rotation);
+                    layer.add(entry.node);
+                    placedSlabs.set(entry.slabId, entry.node);
+                    updateThumbnailIndicator(entry.slabId, true);
+                } else if (entry.kind === 'remove') {
+                    entry.node.remove();
+                    placedSlabs.delete(entry.slabId);
+                    updateThumbnailIndicator(entry.slabId, false);
+                    if (selectedSlabId === entry.slabId) {
+                        selectedSlabId = null;
+                        transformer.nodes([]);
+                    }
+                }
+                layer.batchDraw();
+            }
         }
     });
 
