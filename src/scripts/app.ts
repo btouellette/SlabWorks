@@ -1,8 +1,9 @@
 import Konva from 'konva';
 import localforage from 'localforage';
 import { handleImageUpload } from './imageUpload';
-import { Slab, ShelvedSlab } from './types';
+import { Slab, ShelvedSlab, TargetArea } from './types';
 import { generateId } from './utils';
+import { drawTargetArea } from './targetArea';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,7 +17,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const layer = new Konva.Layer();
     stage.add(layer);
 
+    const targetLayer = new Konva.Layer();
+    stage.add(targetLayer);
+
     const placedSlabs = new Map<string, Konva.Image>();
+
+    let currentTargetArea: TargetArea = { type: 'rectangle', width: 24, height: 48 };
+
+    function redrawTargetArea() {
+        drawTargetArea(targetLayer, currentTargetArea.width, currentTargetArea.height, currentTargetArea.type);
+    }
+
+    const widthInput = document.getElementById('target-width') as HTMLInputElement;
+    const heightInput = document.getElementById('target-height') as HTMLInputElement;
+    const shapeSelect = document.getElementById('target-shape') as HTMLSelectElement;
+
+    widthInput.addEventListener('input', () => {
+        currentTargetArea = { ...currentTargetArea, width: Number(widthInput.value) || 24 };
+        redrawTargetArea();
+    });
+    heightInput.addEventListener('input', () => {
+        currentTargetArea = { ...currentTargetArea, height: Number(heightInput.value) || 48 };
+        redrawTargetArea();
+    });
+    shapeSelect.addEventListener('change', () => {
+        currentTargetArea = { ...currentTargetArea, type: shapeSelect.value as 'rectangle' | 'ellipse' };
+        redrawTargetArea();
+    });
+
+    redrawTargetArea();
 
     const uploadInput = document.getElementById('imageUpload') as HTMLInputElement;
     uploadInput.addEventListener('change', (event) => handleImageUpload(event, saveSlab));
