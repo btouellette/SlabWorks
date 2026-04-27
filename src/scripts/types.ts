@@ -27,6 +27,7 @@ export type RemoveTransformation = {
 export type Transformation = MoveTransformation | RotateTransformation | CutTransformation | RemoveTransformation;
 
 export type ShelvedSlab = {
+    id: string;
     dataUrl: string; // Locally encoded base64 image
     width: number;
     height: number;

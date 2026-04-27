@@ -30,6 +30,8 @@ Each slice is a self-contained unit of work. Slices are ordered by dependency â€
 
 Slices do not add comments explaining what the code does. Comments are only added when the *why* is non-obvious.
 
+**Environment note:** The dev server is served over plain HTTP on a LAN address (not localhost), so `crypto.randomUUID()` is unavailable (requires secure context). Use `generateId()` from `src/scripts/utils.ts` instead, which uses `crypto.getRandomValues()` â€” available in all contexts.
+
 ---
 
 ### Slice 1: Place Slab on Canvas from Shelf

@@ -1,8 +1,7 @@
-import Konva from 'konva';
 import { Slab } from './types';
+import { generateId } from './utils';
 
-export function handleImageUpload(event: Event, stage: Konva.Stage, layer: Konva.Layer, saveSlab: (slab: Slab) => void) {
-    console.log('Handling image upload');
+export function handleImageUpload(event: Event, saveSlab: (slab: Slab) => void) {
     const file = (event.target as HTMLInputElement).files![0];
     if (file) {
         const reader = new FileReader();
@@ -10,14 +9,13 @@ export function handleImageUpload(event: Event, stage: Konva.Stage, layer: Konva
             const imageObj = new Image();
             imageObj.src = e.target!.result as string;
             imageObj.onload = () => {
-                // Save slab data
                 const slab: Slab = {
+                    id: generateId(),
                     dataUrl: imageObj.src,
                     width: imageObj.width,
                     height: imageObj.height,
                     cutSlabs: [],
                 };
-                console.log('Saving slab:', slab);
                 saveSlab(slab);
             };
         };
