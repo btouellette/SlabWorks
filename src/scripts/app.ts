@@ -140,12 +140,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateThumbnailIndicator(slabId: string, isOnCanvas: boolean) {
-        const thumb = document.querySelector<HTMLImageElement>(`[data-slab-id="${slabId}"]`);
+        const thumb = document.querySelector<HTMLElement>(`[data-slab-id="${slabId}"]`)?.parentElement;
         if (!thumb) return;
         if (isOnCanvas) {
-            thumb.classList.add('ring-2', 'ring-indigo-500');
+            thumb.classList.add('bg-indigo-100');
         } else {
-            thumb.classList.remove('ring-2', 'ring-indigo-500');
+            thumb.classList.remove('bg-indigo-100');
         }
     }
 
@@ -154,15 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const shelfThumbnails = document.getElementById('shelf-thumbnails')!;
         shelfThumbnails.innerHTML = '';
         shelf.slabs.forEach(slab => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'rounded p-1' + (placedSlabs.has(slab.id) ? ' bg-indigo-100' : '');
             const img = document.createElement('img');
             img.src = slab.dataUrl;
             img.className = 'w-full h-auto cursor-pointer rounded';
             img.dataset.slabId = slab.id;
-            if (placedSlabs.has(slab.id)) {
-                img.classList.add('ring-2', 'ring-indigo-500');
-            }
             img.addEventListener('click', () => placeSlabOnCanvas(slab));
-            shelfThumbnails.appendChild(img);
+            wrapper.appendChild(img);
+            shelfThumbnails.appendChild(wrapper);
         });
     }
 
