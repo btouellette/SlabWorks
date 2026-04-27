@@ -21,7 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetLayer = new Konva.Layer();
     stage.add(targetLayer);
 
+    const transformer = new Konva.Transformer();
+    layer.add(transformer);
+
     const placedSlabs = new Map<string, Konva.Image>();
+    let selectedSlabId: string | null = null;
 
     let currentTargetArea: TargetArea = { type: 'rectangle', width: 24, height: 48 };
 
@@ -99,10 +103,16 @@ document.addEventListener('DOMContentLoaded', () => {
         imageObj.src = slab.dataUrl;
         imageObj.onload = () => {
             const konvaImage = new Konva.Image({
+                id: slab.id,
                 image: imageObj,
                 x: stage.width() / 2 - imageObj.width / 2,
                 y: stage.height() / 2 - imageObj.height / 2,
                 draggable: true,
+            });
+            konvaImage.on('click', () => {
+                selectedSlabId = slab.id;
+                transformer.nodes([konvaImage]);
+                layer.batchDraw();
             });
             layer.add(konvaImage);
             attachRotationHandler(konvaImage, layer);
@@ -138,6 +148,26 @@ document.addEventListener('DOMContentLoaded', () => {
             shelfThumbnails.appendChild(img);
         });
     }
+
+    stage.on('click', (evt) => {
+        if (evt.target === stage) {
+            selectedSlabId = null;
+            transformer.nodes([]);
+            layer.batchDraw();
+        }
+    });
+
+    document.addEventListener('keydown', (evt) => {
+        if ((evt.key === 'Delete' || evt.key === 'Backspace') && selectedSlabId) {
+            const node = placedSlabs.get(selectedSlabId);
+            if (node) node.destroy();
+            placedSlabs.delete(selectedSlabId);
+            updateThumbnailIndicator(selectedSlabId, false);
+            selectedSlabId = null;
+            transformer.nodes([]);
+            layer.batchDraw();
+        }
+    });
 
     displayShelf();
 });
