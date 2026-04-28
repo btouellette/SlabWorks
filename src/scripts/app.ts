@@ -6,6 +6,7 @@ import { generateId } from './utils';
 import { drawTargetArea } from './targetArea';
 import { attachRotationHandler } from './slabControls';
 import { History } from './history';
+import { cutSlabToTarget, CutPiece } from './cutSlab';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const placedSlabs = new Map<string, Konva.Image>();
     let selectedSlabId: string | null = null;
     const history = new History();
+
+    const cutBtn = document.getElementById('cut-btn') as HTMLButtonElement;
+    function updateCutButton() {
+        cutBtn.disabled = !selectedSlabId;
+    }
 
     let currentTargetArea: TargetArea = { type: 'rectangle', width: 24, height: 48 };
 
@@ -98,42 +104,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Sets up a Konva.Image node with all interactive handlers and adds it to the layer.
+    // Does NOT push a history entry — callers decide whether to record placement.
+    function setupCanvasNode(
+        id: string,
+        img: HTMLImageElement,
+        piece: CutPiece
+    ): Konva.Image {
+        const konvaImage = new Konva.Image({
+            id,
+            image: img,
+            x: piece.x,
+            y: piece.y,
+            rotation: piece.rotation,
+            scaleX: piece.scaleX,
+            scaleY: piece.scaleY,
+            draggable: true,
+        });
+        let dragStartState = { x: 0, y: 0, rotation: 0 };
+        konvaImage.on('dragstart', () => {
+            dragStartState = { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() };
+        });
+        konvaImage.on('dragend', () => {
+            history.push({
+                kind: 'drag',
+                node: konvaImage,
+                before: dragStartState,
+                after: { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() },
+            });
+        });
+        konvaImage.on('click', () => {
+            selectedSlabId = id;
+            transformer.nodes([konvaImage]);
+            layer.batchDraw();
+            updateCutButton();
+        });
+        layer.add(konvaImage);
+        attachRotationHandler(konvaImage, layer, (before, after) => {
+            history.push({ kind: 'rotate', node: konvaImage, before, after });
+        });
+        layer.draw();
+        placedSlabs.set(id, konvaImage);
+        return konvaImage;
+    }
+
     function placeSlabOnCanvas(slab: ShelvedSlab) {
         if (placedSlabs.has(slab.id)) return;
 
         const imageObj = new Image();
         imageObj.src = slab.dataUrl;
         imageObj.onload = () => {
-            const konvaImage = new Konva.Image({
-                id: slab.id,
-                image: imageObj,
+            const piece: CutPiece = {
+                dataUrl: slab.dataUrl,
                 x: stage.width() / 2 - imageObj.width / 2,
                 y: stage.height() / 2 - imageObj.height / 2,
-                draggable: true,
-            });
-            let dragStartState = { x: 0, y: 0, rotation: 0 };
-            konvaImage.on('dragstart', () => {
-                dragStartState = { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() };
-            });
-            konvaImage.on('dragend', () => {
-                history.push({
-                    kind: 'drag',
-                    node: konvaImage,
-                    before: dragStartState,
-                    after: { x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() },
-                });
-            });
-            konvaImage.on('click', () => {
-                selectedSlabId = slab.id;
-                transformer.nodes([konvaImage]);
-                layer.batchDraw();
-            });
-            layer.add(konvaImage);
-            attachRotationHandler(konvaImage, layer, (before, after) => {
-                history.push({ kind: 'rotate', node: konvaImage, before, after });
-            });
-            layer.draw();
-            placedSlabs.set(slab.id, konvaImage);
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+            };
+            const konvaImage = setupCanvasNode(slab.id, imageObj, piece);
             updateThumbnailIndicator(slab.id, true);
             history.push({ kind: 'place', slabId: slab.id, node: konvaImage, x: konvaImage.x(), y: konvaImage.y(), rotation: konvaImage.rotation() });
         };
@@ -171,7 +200,64 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedSlabId = null;
             transformer.nodes([]);
             layer.batchDraw();
+            updateCutButton();
         }
+    });
+
+    cutBtn.addEventListener('click', () => {
+        if (!selectedSlabId) return;
+        const node = placedSlabs.get(selectedSlabId);
+        const targetNode = targetLayer.findOne('#target-area') as Konva.Rect | Konva.Ellipse | undefined;
+        if (!node || !targetNode) return;
+
+        const result = cutSlabToTarget(node, targetNode);
+        if (!result) return;
+
+        const slabIdToRemove = selectedSlabId;
+        const savedX = node.x();
+        const savedY = node.y();
+        const savedRotation = node.rotation();
+
+        node.remove();
+        placedSlabs.delete(slabIdToRemove);
+        updateThumbnailIndicator(slabIdToRemove, false);
+        selectedSlabId = null;
+        transformer.nodes([]);
+        layer.batchDraw();
+        updateCutButton();
+
+        const insideId = generateId();
+        const outsideId = generateId();
+        let loadedCount = 0;
+        let insideNode: Konva.Image | null = null;
+        let outsideNode: Konva.Image | null = null;
+
+        function onBothLoaded() {
+            history.push({
+                kind: 'cut',
+                originalSlabId: slabIdToRemove,
+                node: node!,
+                x: savedX,
+                y: savedY,
+                rotation: savedRotation,
+                insideNode: insideNode!,
+                outsideNode: outsideNode!,
+            });
+        }
+
+        const insideImg = new Image();
+        insideImg.onload = () => {
+            insideNode = setupCanvasNode(insideId, insideImg, result.inside);
+            if (++loadedCount === 2) onBothLoaded();
+        };
+        insideImg.src = result.inside.dataUrl;
+
+        const outsideImg = new Image();
+        outsideImg.onload = () => {
+            outsideNode = setupCanvasNode(outsideId, outsideImg, result.outside);
+            if (++loadedCount === 2) onBothLoaded();
+        };
+        outsideImg.src = result.outside.dataUrl;
     });
 
     document.addEventListener('keydown', (evt) => {
@@ -186,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedSlabId = null;
             transformer.nodes([]);
             layer.batchDraw();
+            updateCutButton();
         } else if (evt.ctrlKey && evt.key.toLowerCase() === 'z' && !evt.shiftKey) {
             evt.preventDefault();
             const entry = history.undo();
@@ -201,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (selectedSlabId === entry.slabId) {
                         selectedSlabId = null;
                         transformer.nodes([]);
+                        updateCutButton();
                     }
                 } else if (entry.kind === 'remove') {
                     entry.node.x(entry.x);
@@ -209,6 +297,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     layer.add(entry.node);
                     placedSlabs.set(entry.slabId, entry.node);
                     updateThumbnailIndicator(entry.slabId, true);
+                } else if (entry.kind === 'cut') {
+                    entry.insideNode.remove();
+                    placedSlabs.delete(entry.insideNode.id());
+                    entry.outsideNode.remove();
+                    placedSlabs.delete(entry.outsideNode.id());
+                    entry.node.x(entry.x);
+                    entry.node.y(entry.y);
+                    entry.node.rotation(entry.rotation);
+                    layer.add(entry.node);
+                    placedSlabs.set(entry.originalSlabId, entry.node);
+                    updateThumbnailIndicator(entry.originalSlabId, true);
                 }
                 layer.batchDraw();
             }
@@ -234,7 +333,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (selectedSlabId === entry.slabId) {
                         selectedSlabId = null;
                         transformer.nodes([]);
+                        updateCutButton();
                     }
+                } else if (entry.kind === 'cut') {
+                    entry.node.remove();
+                    placedSlabs.delete(entry.originalSlabId);
+                    updateThumbnailIndicator(entry.originalSlabId, false);
+                    if (selectedSlabId === entry.originalSlabId) {
+                        selectedSlabId = null;
+                        transformer.nodes([]);
+                        updateCutButton();
+                    }
+                    layer.add(entry.insideNode);
+                    placedSlabs.set(entry.insideNode.id(), entry.insideNode);
+                    layer.add(entry.outsideNode);
+                    placedSlabs.set(entry.outsideNode.id(), entry.outsideNode);
                 }
                 layer.batchDraw();
             }

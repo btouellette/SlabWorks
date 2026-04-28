@@ -4,7 +4,8 @@ type Transform = { x: number; y: number; rotation: number };
 
 export type HistoryEntry =
     | { kind: 'rotate' | 'drag'; node: Konva.Image; before: Transform; after: Transform }
-    | { kind: 'place' | 'remove'; slabId: string; node: Konva.Image; x: number; y: number; rotation: number };
+    | { kind: 'place' | 'remove'; slabId: string; node: Konva.Image; x: number; y: number; rotation: number }
+    | { kind: 'cut'; originalSlabId: string; node: Konva.Image; x: number; y: number; rotation: number; insideNode: Konva.Image; outsideNode: Konva.Image };
 
 export class History {
     private undoStack: HistoryEntry[] = [];
