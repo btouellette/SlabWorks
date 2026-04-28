@@ -1,5 +1,7 @@
 # SlabWorks
 
+**Live app:** https://btouellette.github.io/SlabWorks/
+
 A web app for woodworkers to upload images of wood slabs, set their dimensions, simulate cuts against a target area, and save projects — before making any physical cuts.
 
 ## Features
