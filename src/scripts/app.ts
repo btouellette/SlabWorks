@@ -7,6 +7,7 @@ import { drawTargetArea } from './targetArea';
 import { attachRotationHandler } from './slabControls';
 import { History } from './history';
 import { cutSlabToTarget, CutPiece } from './cutSlab';
+import { saveProject, loadProject, listProjects, PlacedSlab } from './persistence';
 import "../styles/tailwind.css";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -354,5 +355,96 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const projectNameInput = document.getElementById('project-name') as HTMLInputElement;
+    const projectListSelect = document.getElementById('project-list') as HTMLSelectElement;
+    const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+    const loadBtn = document.getElementById('load-btn') as HTMLButtonElement;
+
+    async function refreshProjectList() {
+        const names = await listProjects();
+        const currentValue = projectListSelect.value;
+        projectListSelect.innerHTML = '<option value="">-- select project --</option>';
+        for (const name of names) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            projectListSelect.appendChild(opt);
+        }
+        if (names.includes(currentValue)) {
+            projectListSelect.value = currentValue;
+        }
+    }
+
+    saveBtn.addEventListener('click', async () => {
+        const name = projectNameInput.value.trim();
+        if (!name) return;
+
+        const slabs: PlacedSlab[] = [];
+        for (const [id, node] of Array.from(placedSlabs)) {
+            const img = node.image() as HTMLImageElement;
+            slabs.push({
+                id,
+                dataUrl: img.src,
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                x: node.x() - node.offsetX(),
+                y: node.y() - node.offsetY(),
+                rotation: node.rotation(),
+                scaleX: node.scaleX(),
+                scaleY: node.scaleY(),
+            });
+        }
+
+        await saveProject(name, { targetArea: currentTargetArea, slabs });
+        await refreshProjectList();
+        projectListSelect.value = name;
+    });
+
+    loadBtn.addEventListener('click', async () => {
+        const name = projectListSelect.value;
+        if (!name) return;
+
+        const project = await loadProject(name);
+        if (!project) return;
+
+        for (const node of Array.from(placedSlabs.values())) {
+            node.destroy();
+        }
+        placedSlabs.clear();
+        selectedSlabId = null;
+        transformer.nodes([]);
+        layer.batchDraw();
+        updateCutButton();
+        history.clear();
+
+        currentTargetArea = project.targetArea;
+        widthInput.value = String(currentTargetArea.width);
+        heightInput.value = String(currentTargetArea.height);
+        shapeSelect.value = currentTargetArea.type;
+        redrawTargetArea();
+        saveTargetAreaSettings();
+
+        const loadPromises = project.slabs.map(slab => new Promise<void>((resolve) => {
+            const imageObj = new Image();
+            imageObj.onload = () => {
+                const piece: CutPiece = {
+                    dataUrl: slab.dataUrl,
+                    x: slab.x,
+                    y: slab.y,
+                    rotation: slab.rotation,
+                    scaleX: slab.scaleX,
+                    scaleY: slab.scaleY,
+                };
+                setupCanvasNode(slab.id, imageObj, piece);
+                updateThumbnailIndicator(slab.id, true);
+                resolve();
+            };
+            imageObj.src = slab.dataUrl;
+        }));
+        await Promise.all(loadPromises);
+        displayShelf();
+    });
+
+    refreshProjectList();
     displayShelf();
 });

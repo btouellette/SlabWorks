@@ -35,4 +35,9 @@ export class History {
         if (entry) this.undoStack.push(entry);
         return entry;
     }
+
+    clear(): void {
+        this.undoStack = [];
+        this.redoStack = [];
+    }
 }
